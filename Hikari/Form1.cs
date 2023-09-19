@@ -10,6 +10,12 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Speech.Synthesis;
 using Newtonsoft.Json;
+using NAudio.CoreAudioApi;
+using NAudio.Wave;
+using System.IO;
+using System.Threading;
+using System.Runtime.InteropServices.ComTypes;
+using System.Diagnostics;
 
 namespace Hikari
 {
@@ -49,9 +55,65 @@ namespace Hikari
 
         private void example_tts(string text)
         {
+            int virtualCableDeviceIndex = 0; // VB-Audio Virtual Cable device number
+
+            MMDeviceEnumerator enumerator = new MMDeviceEnumerator();
+            MMDeviceCollection playbackDevices = enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active);
+
+            if (virtualCableDeviceIndex >= playbackDevices.Count)
+            {
+                Console.WriteLine("Error: Cannot connect to VB-Audio Virtual Cable, you can install it from: https://vb-audio.com/Cable/");
+                DialogResult result = MessageBox.Show(
+                    "Cannot connect to VB-Audio Virtual Cable, you can install it from: https://vb-audio.com/Cable/",
+                    "Error",
+                    MessageBoxButtons.OKCancel,
+                    MessageBoxIcon.Error
+                );
+
+                if (result == DialogResult.OK)
+                {
+                    Process.Start("https://vb-audio.com/Cable/");
+                }
+                return;
+            }
+
+            MMDevice virtualCableDevice = playbackDevices[virtualCableDeviceIndex];
+
             SpeechSynthesizer synth = new SpeechSynthesizer();
-            synth.SetOutputToDefaultAudioDevice();
-            synth.SpeakAsync(text);
+
+            MemoryStream audioStream = new MemoryStream();
+
+            foreach (InstalledVoice voice in synth.GetInstalledVoices())
+            {
+                      // if english-US tts is not available then use default installed
+                if (voice.VoiceInfo.Culture.Name == "en-US")
+                {
+                    synth.SelectVoice(voice.VoiceInfo.Name);
+                    break;
+                }
+            }
+
+            synth.SetOutputToWaveStream(audioStream);
+
+            synth.Speak(text);
+
+            audioStream.Seek(0, SeekOrigin.Begin);
+
+            using (var waveOut = new WasapiOut(virtualCableDevice, AudioClientShareMode.Shared, true, 100))
+            {
+                using (var waveStream = new RawSourceWaveStream(audioStream, new WaveFormat(16000, 16, 1)))
+                {
+                    waveOut.Init(waveStream);
+                    waveOut.Play();
+
+                    while (waveOut.PlaybackState == PlaybackState.Playing)
+                    {
+                        Thread.Sleep(500);
+                    }
+                }
+            }
+
+            audioStream.Dispose();
         }
 
         private void button1_Click(object sender, EventArgs e)
