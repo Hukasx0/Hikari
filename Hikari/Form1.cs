@@ -120,6 +120,46 @@ namespace Hikari
         {
             companion_test();
         }
+
+        private bool is_server_running(string host, int port)
+        {
+            using (HttpClient client = new HttpClient())
+            {
+                try
+                {
+                    HttpResponseMessage response = client.GetAsync($"http://{host}:{port}").Result;
+                    if (response.IsSuccessStatusCode)
+                    {
+                        return true;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+                catch (Exception)
+                {
+                    return false;
+                }
+            }
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            if (!is_server_running("localhost", 3000))
+            {
+                DialogResult result = MessageBox.Show(
+                "AI-companion server is not running. You can download the program from GitHub or start it if you have it installed locally.",
+                "Error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+                );
+                if (result == DialogResult.OK)
+                {
+                    Process.Start("https://github.com/Hukasx0/ai-companion/releases/tag/0.9.5");
+                }
+            }
+        }
     }
 }
 
