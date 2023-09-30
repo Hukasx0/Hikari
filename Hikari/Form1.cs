@@ -16,6 +16,8 @@ using System.IO;
 using System.Threading;
 using System.Runtime.InteropServices.ComTypes;
 using System.Diagnostics;
+using MaybeSharp;
+using MaybeDotnet;
 
 namespace Hikari
 {
@@ -28,29 +30,21 @@ namespace Hikari
 
         private async void companion_test()
         {
-            using (HttpClient client = new HttpClient())
-            {
-                try
+            string json_to_send = $"{{ \"prompt\": \"Hello, how are you today?\" }}";
+            MaybeErr<String, Exception> prompt_result = await Http.Post("http://localhost:3000/api/prompt", json_to_send, "application/json");
+            prompt_result.Match<Unit>(
+                ok: value =>
                 {
-                    string json_to_send = $"{{ \"prompt\": \"Hello, how are you today?\" }}";
-                    var content = new StringContent(json_to_send, Encoding.UTF8, "application/json");
-                    HttpResponseMessage response = await client.PostAsync("http://localhost:3000/api/prompt", content);
-                    if (response.IsSuccessStatusCode)
-                    {
-                        string response_body = await response.Content.ReadAsStringAsync();
-                        var response_object = JsonConvert.DeserializeObject<companion_prompt_response>(response_body);
-                        example_tts(response_object.text);
-                    }
-                    else
-                    {
-                        MessageBox.Show($"Error while doing http request to ai-companion backend: {response.StatusCode}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                }
-                catch (Exception ex)
+                    var response_object = JsonConvert.DeserializeObject<companion_prompt_response>(value);
+                    example_tts(response_object.text);
+                    return Unit.Value;
+                },
+                err: error_msg =>
                 {
-                    MessageBox.Show(ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show($"Error while doing http request to ai-companion backend: ${error_msg}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return Unit.Value;
                 }
-            }
+            );
         }
 
         private void example_tts(string text)
@@ -123,25 +117,10 @@ namespace Hikari
 
         private bool is_server_running(string host, int port)
         {
-            using (HttpClient client = new HttpClient())
-            {
-                try
-                {
-                    HttpResponseMessage response = client.GetAsync($"http://{host}:{port}").Result;
-                    if (response.IsSuccessStatusCode)
-                    {
-                        return true;
-                    }
-                    else
-                    {
-                        return false;
-                    }
-                }
-                catch (Exception)
-                {
-                    return false;
-                }
-            }
+            return Http.GetSync($"http://{host}:{port}").Match(
+                ok: (_) => true,
+                err: (_) => false
+            );
         }
 
         private void Form1_Load(object sender, EventArgs e)
